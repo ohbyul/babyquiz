@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>돌잔치 퀴즈</title>
+  <style>
+    @font-face {
+      font-family: "나눔손글씨 따악단단";
+      src: url("fonts/나눔손글씨 따악단단.ttf") format("truetype"),
+           url("fonts/NanumDdakdandan.ttf") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "나눔손글씨 따악단단", "Malgun Gothic", sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 { margin-bottom: 16px; font-size: 2.5rem; font-weight: 400; }
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .controls label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .controls input[type="radio"] { accent-color: #e94560; }
+    .btn {
+      background: #e94560;
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .stage-wrap {
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 4 / 3;
+      background: #16213e;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .stage-container { position: relative; width: 100%; height: 100%; }
+    .stage {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5%;
+    }
+    .stage:not(.active) { display: none !important; }
+    .stage.active { display: flex !important; }
+    .stage.stage-boxes.active { display: grid !important; padding: 0 3%; }
+
+    .stage-intro .intro-text { font-size: clamp(1.75rem, 5vw, 3rem); text-align: center; line-height: 1.4; max-width: 90%; }
+    .stage-question .question-text { font-size: clamp(1.5rem, 4vw, 2.5rem); text-align: center; line-height: 1.5; max-width: 90%; }
+
+    .stage-boxes {
+      --box-gap: 2rem;
+      display: grid;
+      gap: var(--box-gap);
+      justify-content: center;
+      align-content: center;
+      justify-items: stretch;
+      align-items: stretch;
+      width: 100%;
+      height: 100%;
+      padding: 2.5rem 3% 1rem;
+    }
+    .stage-boxes.boxes-2 { --box-cell: 7cm; grid-template-columns: var(--box-cell) var(--box-cell); grid-template-rows: var(--box-cell); }
+    .stage-boxes.boxes-4 { --box-cell: 6cm; --row-gap: 3.5rem; grid-template-columns: var(--box-cell) var(--box-cell); grid-template-rows: var(--box-cell) var(--box-cell); row-gap: var(--row-gap); column-gap: var(--box-gap); }
+    .stage-boxes.boxes-6 {
+      --box-cell: 5cm;
+      --row-gap: 3.5rem;
+      grid-template-columns: var(--box-cell) var(--box-cell) var(--box-cell);
+      grid-template-rows: var(--box-cell) var(--box-cell);
+      row-gap: var(--row-gap);
+      column-gap: var(--box-gap);
+    }
+    .stage-boxes.boxes-7 {
+      --box-cell: 4.5cm;
+      --row-gap: 3.5rem;
+      grid-template-columns: var(--box-cell) var(--box-cell) var(--box-cell) var(--box-cell);
+      grid-template-rows: var(--box-cell) var(--box-cell);
+      row-gap: var(--row-gap);
+      column-gap: var(--box-gap);
+      height: auto;
+      bottom: auto;
+      top: 50%;
+      transform: translateY(-50%);
+      align-self: center;
+    }
+    .stage-boxes .box-outer .box-wrap { aspect-ratio: 1; }
+    .stage-boxes.boxes-2 .box-wrap,
+    .stage-boxes.boxes-4 .box-wrap,
+    .stage-boxes.boxes-6 .box-wrap,
+    .stage-boxes.boxes-6 .box-wrap { aspect-ratio: 1; width: 100%; height: 100%; }
+    @keyframes box-shake {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-4px, -3px); }
+      50% { transform: translate(4px, 3px); }
+      75% { transform: translate(-3px, 4px); }
+    }
+    .stage-boxes.boxes-6.shake-boxes .box-wrap {
+      animation: box-shake 0.12s ease-in-out infinite;
+    }
+    .stage-boxes .box-outer { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+    .stage-boxes .box-wrap {
+      width: 100%; height: 100%; min-width: 0; min-height: 0;
+      position: relative; border-radius: 12px; overflow: hidden;
+      border: 4px solid rgba(255,255,255,0.3); background: #0f3460;
+    }
+    .box-wrap .photo {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; object-position: center center;
+      transition: opacity 0.25s ease;
+    }
+    .box-wrap .photo.hidden { opacity: 0; pointer-events: none; }
+    .box-wrap .cover {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.25s ease;
+    }
+    .box-wrap .cover .cover-number { font-size: clamp(2rem, 10vw, 5rem); font-weight: 700; color: rgba(255,255,255,0.85); line-height: 1; }
+    .box-wrap .cover.hidden { opacity: 0; pointer-events: none; }
+    .box-outer { position: relative; display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; }
+    .box-outer .box-wrap { flex: 1; width: 100%; min-height: 0; }
+    .box-outer .box-number {
+      position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+      margin-bottom: 4px;
+      background: rgba(0,0,0,0.6); color: #fff;
+      padding: 4px 12px; border-radius: 8px;
+      font-size: clamp(1.25rem, 4.5vw, 1.8rem); font-weight: 700;
+      z-index: 3;
+      white-space: nowrap;
+    }
+
+    .stage-countdown .count-num { font-size: clamp(5rem, 20vw, 12rem); font-weight: 700; color: #e94560; text-shadow: 0 0 40px rgba(233,69,96,0.5); line-height: 1; }
+    #answerCount {
+      font-size: clamp(6rem, 20vw, 12rem);
+      font-weight: 700;
+      color: #4caf50;
+      text-shadow: 0 0 40px rgba(76, 175, 80, 0.5);
+      line-height: 1;
+    }
+    .btn-answer {
+      background: #4caf50;
+      color: #fff;
+      font-family: "나눔손글씨 따악단단", "Malgun Gothic", sans-serif;
+      border: none;
+      padding: 18px 50px;
+      border-radius: 15px;
+      font-size: 2.1rem;
+      font-weight: bolder;
+      cursor: pointer;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn-answer:hover {
+      background: #43a047;
+      transform: scale(1.03);
+    }
+
+    .stage-answer {
+      flex-direction: column; justify-content: center;
+      padding: 2% 3%;
+    }
+    .stage-answer .answer-text {
+      flex-shrink: 0; font-size: clamp(1.75rem, 5vw, 3rem);
+      text-align: center; color: #e94560; margin-top: 2%; margin-bottom: 1%;
+    }
+    .stage-answer .answer-boxes {
+      flex: 1; min-height: 0; display: grid;
+      gap: 2rem;
+      justify-content: center; align-content: center;
+      justify-items: stretch; align-items: stretch;
+      padding: 0 3%; width: 100%;
+    }
+    .stage-answer .answer-boxes.boxes-2 { --box-cell: 7cm; grid-template-columns: var(--box-cell) var(--box-cell); grid-template-rows: var(--box-cell); }
+    .stage-answer .answer-boxes.boxes-4 { --box-cell: 6cm; grid-template-columns: var(--box-cell) var(--box-cell); grid-template-rows: var(--box-cell) var(--box-cell); row-gap: 3.5rem; column-gap: 2rem; }
+    .stage-answer .answer-boxes.boxes-6 {
+      --box-cell: 5cm;
+      grid-template-columns: var(--box-cell) var(--box-cell) var(--box-cell);
+      grid-template-rows: var(--box-cell) var(--box-cell);
+      row-gap: 3.5rem;
+      column-gap: 2rem;
+      flex: 0 0 auto;
+    }
+    .stage-answer .answer-boxes.boxes-7 {
+      --box-cell: 4.5cm;
+      grid-template-columns: var(--box-cell) var(--box-cell) var(--box-cell) var(--box-cell);
+      grid-template-rows: var(--box-cell) var(--box-cell);
+      row-gap: 3.5rem;
+      column-gap: 2rem;
+      flex: 0 0 auto;
+    }
+    /* 4라운드 정답: 그리드를 퀴즈 때와 동일하게 화면 세로 중앙에 고정 (위로 올라가지 않게) */
+    .stage-answer .answer-boxes.boxes-7 {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: auto;
+      margin: 0;
+    }
+    .stage-answer:has(.answer-boxes.boxes-6) .answer-text,
+    .stage-answer:has(.answer-boxes.boxes-7) .answer-text {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      margin-bottom: 0;
+    }
+    .stage-answer .answer-boxes .box-outer { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+    .stage-answer .answer-boxes .box-wrap {
+      width: 100%; height: 100%; min-width: 0; min-height: 0;
+      position: relative; border-radius: 12px; overflow: hidden;
+      border: 4px solid rgba(255,255,255,0.3); background: #0f3460;
+    }
+    .stage-answer .answer-boxes .box-wrap { aspect-ratio: 1; width: 100%; height: 100%; }
+    .stage-answer .box-wrap .cover { opacity: 0; pointer-events: none; }
+    .stage-answer .box-wrap.answer-highlight { border: 5px solid #e94560; box-shadow: 0 0 24px rgba(233,69,96,0.7); }
+  </style>
+</head>
+<body>
+  <h1 id="mainTitle">돌잔치 퀴즈</h1>
+  <div class="controls">
+    <!-- <label><input type="radio" name="mode" value="2" checked /> 1라운드</label> -->
+    <!-- <label><input type="radio" name="mode" value="4" /> 2라운드</label> -->
+    <label><input type="radio" name="mode" value="4" /> 1라운드</label>
+    <label><input type="radio" name="mode" value="lastquiz" /> 2라운드</label>
+    <button type="button" class="btn" id="btnStart">퀴즈 시작</button>
+  </div>
+  <div class="stage-wrap">
+    <div id="stageContainer" class="stage-container"></div>
+  </div>
+  <div id="loadStatus" style="display:none; margin-top:8px; color:#e94560;"></div>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.14.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script>
+    const CFG = window.DOL_QUIZ_CONFIG || {};
+    const BABY_NAME = CFG.BABY_NAME || "유성";
+    const SHOW_SEC = 5;
+    const COUNTDOWN_SEC = 5;
+    const IMAGE_COUNTS = { 2: 2, 4: 4, 6: 6, lastquiz: 6 };
+    const IMAGE_FOLDERS = { 2: "2", 4: "4", 6: "6", lastquiz: "last quiz" };
+    const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG", ".gif", ".GIF", ".webp", ".WEBP"];
+    let resolvedImageLists = {};
+
+    function tryLoadImageUrl(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(url);
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    }
+    async function tryFindImageInFolder(folder, baseName) {
+      const base = "images/" + encodeURIComponent(folder) + "/";
+      for (const ext of IMAGE_EXTENSIONS) {
+        const url = base + encodeURIComponent(baseName + ext);
+        const r = await tryLoadImageUrl(url);
+        if (r) return r;
+      }
+      return null;
+    }
+    function shuffleArray(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    async function resolveImageList(mode) {
+      const folder = IMAGE_FOLDERS[mode] != null ? IMAGE_FOLDERS[mode] : String(mode);
+      const n = IMAGE_COUNTS[mode] || 2;
+      const list = [];
+      setLoadStatus("이미지 찾는 중… (0 / " + n + ")");
+      for (let i = 1; i < n; i++) {
+        setLoadStatus("이미지 찾는 중… (" + i + " / " + n + ")");
+        const url = await tryFindImageInFolder(folder, String(i));
+        if (!url) { setLoadStatus(i + ".jpg (또는 .jpeg, .png) 파일을 찾을 수 없습니다. 파일명 규칙을 확인하세요."); return null; }
+        list.push(url);
+      }
+      setLoadStatus("이미지 찾는 중… (" + n + " / " + n + ")");
+      const ansUrl = await tryFindImageInFolder(folder, "정답");
+      if (!ansUrl) { setLoadStatus("정답.jpg (또는 .jpeg, .png) 파일을 찾을 수 없습니다."); return null; }
+      list.push(ansUrl);
+      const shuffled = shuffleArray(list);
+      const answerNum = shuffled.indexOf(ansUrl) + 1;
+      return { list: shuffled, answerNum };
+    }
+    document.title = BABY_NAME + "을 찾아라";
+    const titleEl = document.getElementById("mainTitle");
+    if (titleEl) titleEl.textContent = BABY_NAME + "을 찾아라";
+    const FACE_PADDING = 0.2;
+    const WEIGHTS_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights";
+
+    let currentMode = 2;
+    let step = 0;
+    let timer = null;
+    let faceModelLoaded = false;
+    let croppedCache = {};
+
+    function getImageFolder(mode) { return IMAGE_FOLDERS[mode] != null ? IMAGE_FOLDERS[mode] : String(mode); }
+    function getImageSrcByIndex(boxIndex) {
+      const data = resolvedImageLists[currentMode];
+      const list = data && data.list ? data.list : [];
+      if (boxIndex >= list.length) return "";
+      return list[boxIndex] || "";
+    }
+    function setLoadStatus(text) { const el = document.getElementById("loadStatus"); if (el) { el.style.display = "block"; el.textContent = text; } }
+    function hideLoadStatus() { const el = document.getElementById("loadStatus"); if (el) el.style.display = "none"; }
+
+    function loadFaceModel() {
+      if (faceModelLoaded) return Promise.resolve();
+      setLoadStatus("얼굴 인식 모델 불러오는 중…");
+      return faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS_URL).then(() => { faceModelLoaded = true; hideLoadStatus(); });
+    }
+
+    function cropToFace(img, src) {
+      return new Promise((resolve) => {
+        const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+        faceapi.detectAllFaces(img, opts).then((detections) => {
+          if (!detections || detections.length === 0) { resolve(null); return; }
+          const box = detections[0].box;
+          const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          const faceCenterX = box.x + box.width / 2, faceCenterY = box.y + box.height / 2;
+          const faceSize = Math.max(box.width, box.height);
+          const halfSize = (faceSize * (1 + 2 * FACE_PADDING)) / 2;
+          let x = faceCenterX - halfSize, y = faceCenterY - halfSize;
+          let bw = halfSize * 2, bh = halfSize * 2;
+          if (x < 0) x = 0; if (y < 0) y = 0;
+          if (x + bw > w) x = Math.max(0, w - bw);
+          if (y + bh > h) y = Math.max(0, h - bh);
+          bw = Math.min(bw, w - x); bh = Math.min(bh, h - y);
+          const canvas = document.createElement("canvas");
+          canvas.width = bw; canvas.height = bh;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, x, y, bw, bh, 0, 0, bw, bh);
+          try { resolve(canvas.toDataURL("image/jpeg", 0.92)); } catch (e) { resolve(null); }
+        }).catch(() => resolve(null));
+      });
+    }
+
+    function loadAndCropImage(src) {
+      if (croppedCache[src]) return Promise.resolve(croppedCache[src]);
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => { cropToFace(img, src).then((dataUrl) => { croppedCache[src] = dataUrl || src; resolve(croppedCache[src]); }); };
+        img.onerror = () => { croppedCache[src] = src; resolve(src); };
+        img.src = src;
+      });
+    }
+
+    async function preloadAndCropAll() {
+      const data = await resolveImageList(currentMode);
+      if (!data || !data.list || data.list.length === 0) return;
+      resolvedImageLists[currentMode] = data;
+      const list = data.list;
+      const N = list.length;
+      setLoadStatus("얼굴 인식 중… (0 / " + N + ")");
+      for (let i = 0; i < list.length; i++) {
+        setLoadStatus("얼굴 인식 중… (" + (i + 1) + " / " + N + ")");
+        await loadAndCropImage(list[i]);
+      }
+      hideLoadStatus();
+    }
+
+    function getContainer() { return document.getElementById("stageContainer"); }
+    function clearStages() { getContainer().innerHTML = ""; }
+    function createStage(id, className, html) {
+      const el = document.createElement("div");
+      el.id = id; el.className = "stage " + className; el.innerHTML = html;
+      getContainer().appendChild(el); return el;
+    }
+    function showStage(id) {
+      getContainer().querySelectorAll(".stage").forEach(s => { s.classList.toggle("active", s.id === id); });
+    }
+
+    function buildStages() {
+      clearStages();
+      const n = currentMode === "lastquiz" ? 6 : parseInt(currentMode, 10);
+      const boxCount = n;
+
+      // const questionText = currentMode === "lastquiz" ? `다음 중 ${BABY_NAME}는?` : `다음 중 ${BABY_NAME}가 아닌 사람은?`;
+      const questionText = `다음 중 성이는 누구일까요? <br> 5초동안 보여드려요!`;
+      createStage("question", "stage-question", `<p class="question-text">${questionText}</p>`);
+
+      const boxesClass = "stage-boxes boxes-" + n;
+      let boxesHtml = "";
+      for (let i = 0; i < boxCount; i++) {
+        const src = getImageSrcByIndex(i);
+        const displaySrc = croppedCache[src] || src;
+        boxesHtml += `<div class="box-outer"><span class="box-number">${i + 1}번</span><div class="box-wrap"><img class="photo" src="${displaySrc}" alt="${i + 1}번" onerror="this.style.display='none'"><div class="cover"><span class="cover-number">${i + 1}번</span></div></div></div>`;
+      }
+      createStage("boxes", boxesClass, boxesHtml);
+
+      createStage("countdown", "stage-countdown", '<div class="count-num" id="countNum">5</div>');
+
+      const data = resolvedImageLists[currentMode] || {};
+      const answerNum = data.answerNum || (data.list ? data.list.length : 1);
+      let answerBoxesHtml = `<p class="answer-text" id="answerText">정답은 ${answerNum}번!</p><div class="answer-boxes ${boxesClass}">`;
+      for (let i = 0; i < boxCount; i++) {
+        const src = getImageSrcByIndex(i);
+        const displaySrc = croppedCache[src] || src;
+        const highlightClass = (i + 1) === answerNum ? " answer-highlight" : "";
+        answerBoxesHtml += `<div class="box-outer"><span class="box-number">${i + 1}번</span><div class="box-wrap${highlightClass}"><img class="photo" src="${displaySrc}" alt="${i + 1}번" onerror="this.style.display='none'"><div class="cover"><span class="cover-number">${i + 1}번</span></div></div></div>`;
+      }
+      answerBoxesHtml += "</div>";
+      createStage("answer", "stage-answer", answerBoxesHtml);
+    }
+
+    function startQuiz() {
+      buildStages();
+      step = 0;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          showStage("question");
+          timer = setTimeout(() => { step = 1; runStep(); }, 3000);
+        });
+      });
+    }
+
+    function runStep() {
+      if (timer) clearTimeout(timer);
+      if (step === 0) { showStage("question"); timer = setTimeout(() => { step = 1; runStep(); }, 3000); return; }
+      if (step === 1) {
+        showStage("boxes");
+        const boxesStage = getContainer().querySelector("#boxes");
+        if (boxesStage) {
+          const photos = boxesStage.querySelectorAll(".photo");
+          const covers = boxesStage.querySelectorAll(".cover");
+          photos.forEach(p => p.classList.remove("hidden"));
+          covers.forEach(c => c.classList.add("hidden"));
+          if (currentMode === "lastquiz") boxesStage.classList.add("shake-boxes");
+          timer = setTimeout(() => {
+            photos.forEach(p => p.classList.add("hidden"));
+            covers.forEach(c => c.classList.remove("hidden"));
+            if (currentMode === "lastquiz") boxesStage.classList.remove("shake-boxes");
+            step = 2; runStep();
+          }, SHOW_SEC * 1000);
+        }
+        return;
+      }
+      if (step === 2) {
+        showStage("question");
+
+      const questionStage = getContainer().querySelector("#question");
+
+      if (questionStage) {
+        questionStage.innerHTML = `
+          <button type="button" class="btn-answer" id="btnShowAnswer">
+            정답 확인
+          </button>
+        `;
+
+        const answerBtn = document.getElementById("btnShowAnswer");
+
+        if (answerBtn) {
+          answerBtn.addEventListener("click", () => {
+            let count = 3;
+
+            questionStage.innerHTML = `
+              <div class="count-num" id="answerCount">${count}</div>
+            `;
+
+            const countEl = document.getElementById("answerCount");
+
+            const countInterval = setInterval(() => {
+              count--;
+
+              if (count > 0) {
+                countEl.textContent = count;
+              } else {
+                clearInterval(countInterval);
+                step = 3;
+                runStep();
+              }
+            }, 1000);
+          });
+        }
+      }
+
+      return;
+      }
+      if (step === 3) { showStage("answer"); document.getElementById("btnStart").disabled = false; }
+    }
+
+    document.getElementById("btnStart").addEventListener("click", async () => {
+      const btn = document.getElementById("btnStart");
+      btn.disabled = true;
+      try {
+        await loadFaceModel();
+        const raw = document.querySelector('input[name="mode"]:checked').value;
+        currentMode = raw === "lastquiz" ? raw : parseInt(raw, 10);
+        await preloadAndCropAll();
+        startQuiz();
+      } catch (e) {
+        setLoadStatus("모델 로딩 실패. 페이지 새로고침 후 다시 시도해 주세요.");
+        btn.disabled = false;
+      }
+    });
+
+    function buildIntro() {
+      clearStages();
+      createStage("intro", "stage-intro stage-question", `<p class="intro-text">퀴즈! ${BABY_NAME}을 찾아라</p>`);
+      showStage("intro");
+    }
+    buildIntro();
+  </script>
+</body>
+</html>
